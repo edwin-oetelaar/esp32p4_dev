@@ -17,6 +17,7 @@
 #include "driver/i2c_master.h"
 #include "esp_console.h"
 #include "esp_log.h"
+#include "gp8413_sdc.h"
 
 static const char *TAG = "cmd_i2ctools";
 
@@ -192,7 +193,7 @@ static int do_i2cget_cmd(int argc, char **argv)
         .scl_speed_hz = i2c_frequency,
         .device_address = chip_addr,
     };
-    
+
     i2c_master_dev_handle_t dev_handle;
     if (i2c_master_bus_add_device(tool_bus_handle, &i2c_dev_conf, &dev_handle) != ESP_OK)
     {
@@ -440,6 +441,118 @@ static void register_i2cdump(void)
     ESP_ERROR_CHECK(esp_console_cmd_register(&i2cdump_cmd));
 }
 
+static struct
+{
+    struct arg_int *ch0_val;
+    struct arg_int *ch1_val;
+    struct arg_end *end;
+} dacset_args;
+
+static int do_dacset_cmd(int argc, char **argv)
+{
+    int nerrors = arg_parse(argc, argv, (void **)&dacset_args);
+    if (nerrors != 0)
+    {
+        arg_print_errors(stderr, dacset_args.end, argv[0]);
+        return 0;
+    }
+
+    uint32_t ch0_val = 0;
+    uint32_t ch1_val = 0;
+    gp8413_channel_t channel_type = GP8413_CH_NONE;
+    if (dacset_args.ch0_val->count == 0 && dacset_args.ch1_val->count == 0)
+    {
+        ESP_LOGE(TAG, "No output value specified for channel 1 or channel 2");
+        return 1;
+    }
+    if (dacset_args.ch0_val->count == 1 && dacset_args.ch1_val->count == 1)
+    {
+        channel_type = GP8413_CH0_CH1;
+        ch0_val = dacset_args.ch0_val->ival[0];
+        ch1_val = dacset_args.ch1_val->ival[0];
+    }
+    else if (dacset_args.ch0_val->count == 1)
+    {
+        channel_type = GP8413_CH0;
+        ch0_val = dacset_args.ch0_val->ival[0];
+    }
+    else if (dacset_args.ch1_val->count == 1)
+    {
+        channel_type = GP8413_CH1;
+        ch1_val = dacset_args.ch1_val->ival[0];
+    }
+
+    if (ch0_val > 10000 || ch1_val > 10000)
+    {
+        ESP_LOGE(TAG, "Output voltage must be between 0 and 10000 mV");
+        return 1;
+    }
+
+    ESP_LOGI(TAG, "Setting output voltage to %d mV on channel 1", ch0_val);
+    ESP_LOGI(TAG, "Setting output voltage to %d mV on channel 2", ch1_val);
+
+    gp8413_init_params_t init_params = {
+        .bus_handle = tool_bus_handle,
+        .device_addr = GP8413_I2C_ADDRESS,
+        .output_range = GP8413_OUTPUT_RANGE_10V,
+        .voltage_ch0 = ch0_val,
+        .voltage_ch1 = ch1_val,
+        .channel_type = channel_type
+    };
+
+    ESP_LOGI(TAG, "Initializing DAC with parameters: "
+                 "Device Address: 0x%02x, "
+                 "Output Range: %d mV, "
+                 "Channel Type: %d, "
+                 "Channel 0 Voltage: %d mV, "
+                 "Channel 1 Voltage: %d mV",
+             init_params.device_addr,
+             init_params.output_range,
+             init_params.channel_type,
+             init_params.voltage_ch0,
+             init_params.voltage_ch1); 
+
+    gp8413_handle_t *dac = gp8413_init(&init_params);
+    if (dac == NULL)
+    {
+        ESP_LOGE(TAG, "Failed to initialize DAC");
+        return 1;
+    }
+    ESP_LOGI(TAG, "DAC initialized successfully");
+    esp_err_t ret = gp8413_set_output_voltage(dac, ch0_val, 0);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to set output voltage for channel 0: %s", esp_err_to_name(ret));
+        gp8413_deinit(&dac);
+        return 1;
+    }
+    ret = gp8413_set_output_voltage(dac, ch1_val, 1);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to set output voltage for channel 1: %s", esp_err_to_name(ret));
+        gp8413_deinit(&dac);
+        return 1;
+    }
+    ESP_LOGI(TAG, "Output voltage set successfully");
+    ESP_LOGI(TAG, "Setting output voltage to %d mV on channel 0", ch0_val);
+    ESP_LOGI(TAG, "Setting output voltage to %d mV on channel 1", ch1_val);
+    gp8413_deinit(&dac);
+    return 0;
+}
+
+static void register_dac_set(void)
+{
+    dacset_args.ch0_val = arg_int0("s", "ch0", "<ch0 speed in mv>", "Output value for channel 0 in millivolts");
+    dacset_args.ch1_val = arg_int0("b", "ch1", "<ch1 brake_force in mv>", "Output value for channel 1 in millivolts");
+    dacset_args.end = arg_end(2);
+    const esp_console_cmd_t dacset_cmd = {
+        .command = "dac_set_output",
+        .help = "Set value of DAC output",
+        .hint = NULL,
+        .func = &do_dacset_cmd,
+        .argtable = &dacset_args};
+    ESP_ERROR_CHECK(esp_console_cmd_register(&dacset_cmd));
+}
 
 void register_i2ctools(void)
 {
@@ -448,5 +561,5 @@ void register_i2ctools(void)
     register_i2cget();
     register_i2cset();
     register_i2cdump();
-   
+    register_dac_set();
 }

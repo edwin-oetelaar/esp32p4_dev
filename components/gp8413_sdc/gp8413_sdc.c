@@ -80,23 +80,25 @@ static esp_err_t write_data_i2c(gp8413_handle_t *handle, uint8_t *data, size_t s
     return ESP_OK;
 }
 
-
 // Initialize the GP8413 device and return a handle
-gp8413_handle_t *gp8413_init(i2c_master_bus_handle_t bus_handle,
-                             uint8_t device_addr,
-                             gp8413_output_range_t output_range,
-                             uint32_t voltage_ch0,
-                             uint32_t voltage_ch1)
+gp8413_handle_t *gp8413_init(gp8413_init_params_t *params)
 {
-    // Check if bus_handle is valid
-    if (!bus_handle)
+    // Check if params is valid
+    if (!params || !params->bus_handle)
     {
-        ESP_LOGE(TAG, "No bus handle provided");
-        return NULL; // no bus handle
+        ESP_LOGE(TAG, "Invalid initialization parameters");
+        return NULL; // no parameters or bus handle
     }
 
+    // Extract parameters from the struct
+    i2c_master_bus_handle_t bus_handle = params->bus_handle;
+    uint8_t device_addr = params->device_addr;
+    gp8413_output_range_t output_range = params->output_range;
+    uint32_t voltage_ch0 = params->voltage_ch0;
+    uint32_t voltage_ch1 = params->voltage_ch1;
+
     // Allocate memory for the device handle
-    gp8413_handle_t *handle = (gp8413_handle_t *)calloc(1, sizeof(gp8413_handle_t));
+    gp8413_handle_t *handle = calloc(1, sizeof(gp8413_handle_t));
 
     if (!handle)
     {

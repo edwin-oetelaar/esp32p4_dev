@@ -25,12 +25,31 @@ extern "C"
         GP8413_OUTPUT_RANGE_10V = 10000, // in millivolts
     } gp8413_output_range_t;
 
+    typedef enum
+    {
+        GP8413_CH_NONE = 0x00, // no channels
+        GP8413_CH0 = 0x01, // channel 1 only
+        GP8413_CH1 = 0x02, // channel 2 only
+        GP8413_CH0_CH1 = 0x01 + 0x02, // both channels
+    } gp8413_channel_t;
+
     typedef struct
     {
         i2c_master_bus_handle_t bus_handle;
         uint8_t device_addr; // I2C device address (0x59)
         gp8413_output_range_t output_range;
     } gp8413_handle_t;
+
+    // Define the parameter struct
+    typedef struct
+    {
+        i2c_master_bus_handle_t bus_handle;
+        uint8_t device_addr;
+        gp8413_output_range_t output_range;
+        uint32_t voltage_ch0;
+        uint32_t voltage_ch1;
+        gp8413_channel_t channel_type; // GP8413_CH0, GP8413_CH1, or GP8413_CH0_CH1
+    } gp8413_init_params_t;
 
     // private functions
     // [[maybe_unused]] static esp_err_t write_data_i2c(gp8413_handle_t *handle, uint8_t *data, size_t size);
@@ -40,14 +59,10 @@ extern "C"
     /**
      * @brief Initialize the GP8413 device and return a handle.
      *
-     * @param dev_handle   I2C device handle.
-     * @param device_addr  I2C device address.
-     * @param output_range Initial output voltage range.
-     * @param voltage_ch0  Initial output voltage for channel 0 in millivolts.
-     * @param voltage_ch1  Initial output voltage for channel 1 in millivolts.
+     * @param params Initialization parameters.
      * @return Pointer to gp8413_handle_t on success, NULL on failure.
      */
-    gp8413_handle_t *gp8413_init(i2c_master_bus_handle_t bus_handle, uint8_t device_addr, gp8413_output_range_t output_range, uint32_t voltage_ch0, uint32_t voltage_ch1);
+    gp8413_handle_t *gp8413_init(gp8413_init_params_t *params);
 
     /**
      * @brief Deinitialize the GP8413 device and free its handle.
