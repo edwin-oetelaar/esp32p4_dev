@@ -13,11 +13,13 @@
 */
 #include <stdio.h>
 #include <string.h>
+#include <inttypes.h>
 #include "argtable3/argtable3.h"
 #include "driver/i2c_master.h"
 #include "esp_console.h"
 #include "esp_log.h"
 #include "gp8413_sdc.h"
+#include "ssd1306.h"
 
 static const char *TAG = "cmd_i2ctools";
 
@@ -497,20 +499,19 @@ static int do_dacset_cmd(int argc, char **argv)
         .output_range = GP8413_OUTPUT_RANGE_10V,
         .voltage_ch0 = ch0_val,
         .voltage_ch1 = ch1_val,
-        .channel_type = channel_type
-    };
+        .channel_type = channel_type};
 
     ESP_LOGI(TAG, "Initializing DAC with parameters: "
-                 "Device Address: 0x%02x, "
-                 "Output Range: %d mV, "
-                 "Channel Type: %d, "
-                 "Channel 0 Voltage: %d mV, "
-                 "Channel 1 Voltage: %d mV",
+                  "Device Address: 0x%02x, "
+                  "Output Range: %d mV, "
+                  "Channel Type: %d, "
+                  "Channel 0 Voltage: %d mV, "
+                  "Channel 1 Voltage: %d mV",
              init_params.device_addr,
              init_params.output_range,
              init_params.channel_type,
              init_params.voltage_ch0,
-             init_params.voltage_ch1); 
+             init_params.voltage_ch1);
 
     gp8413_handle_t *dac = gp8413_init(&init_params);
     if (dac == NULL)
@@ -554,6 +555,80 @@ static void register_dac_set(void)
     ESP_ERROR_CHECK(esp_console_cmd_register(&dacset_cmd));
 }
 
+static struct
+{
+    struct arg_int *ch0_val;
+    struct arg_end *end;
+} ssdset_args;
+
+static int do_ssd1306_cmd(int argc, char **argv)
+{
+    int nerrors = arg_parse(argc, argv, (void **)&ssdset_args);
+    if (nerrors != 0)
+    {
+        arg_print_errors(stderr, ssdset_args.end, argv[0]);
+        return 0;
+    }
+
+    uint32_t ch0_val = ssdset_args.ch0_val->ival[0];
+    ESP_LOGI(TAG, "Setting SSD1306 display text to: %d", ch0_val);
+    // Here you would typically call a function to set the text on the SSD1306 display
+    // For example: ssd1306_set_text(ch0_val);
+
+    // ssd1306_handle_t ssd1306_handle = {0};
+    // ssd1306_handle.tool_bus_handle = tool_bus_handle;
+    // ssd1306_handle.device_address = SSD1306_I2C_ADDRESS;
+    ssd1306_handle_t dev = {
+        .bus_handle = tool_bus_handle,
+        // Assuming tool_bus_handle is already initialized and points to the I2C bus
+        .device_address = SSD1306_I2C_ADDRESS,
+        .scl_speed_hz = i2c_frequency,
+        .external_vcc = 0, // Set to 1 if using external VCC
+        .width = 128,
+        .height = 64,
+        .pages = 8,         // For a 128x64 display, there are 8 pages
+        .dev_handle = NULL, // This will be set when the device is initialized
+        .buffer = {0},      // clear the buffer
+    };
+
+    ssd1306_init(&dev, 128, 64, 0); // Initialize the SSD1306 display
+    if (dev.dev_handle == NULL)
+    {
+        ESP_LOGE(TAG, "Failed to initialize SSD1306 display");
+        return 1;
+    }
+    ESP_LOGI(TAG, "SSD1306 display initialized successfully");
+    // Fill the display with white color (1)
+
+    char buf[16];
+    snprintf(buf, sizeof(buf), "Value: %ld", ch0_val);
+    ssd1306_printFixed16(&dev, 0, 0, 1, buf); // Draw the string at (0, 0) with white color
+    ssd1306_show(&dev);                       // Show the drawn string on the display
+    ESP_LOGI(TAG, "SSD1306 display updated with text: %s", buf);
+
+    //    ssd1306_fill(&dev, 1);
+    //    ssd1306_show(&dev); // Show the filled display
+    //    ESP_LOGI(TAG, "SSD1306 display filled with white color");
+
+    // vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for 1 second to see the filled display
+    ssd1306_deinit(&dev); // Deinitialize the display after use
+    ESP_LOGI(TAG, "SSD1306 display deinitialized successfully");
+    return 0;
+}
+
+static void register_ssd1306(void)
+{
+    ssdset_args.ch0_val = arg_int0("s", "txt", "display integer", "some value");
+    ssdset_args.end = arg_end(2);
+    const esp_console_cmd_t ssdset_cmd = {
+        .command = "ssd1306",
+        .help = "Set text",
+        .hint = NULL,
+        .func = &do_ssd1306_cmd,
+        .argtable = &ssdset_args};
+    ESP_ERROR_CHECK(esp_console_cmd_register(&ssdset_cmd));
+}
+
 void register_i2ctools(void)
 {
     register_i2cconfig();
@@ -562,4 +637,5 @@ void register_i2ctools(void)
     register_i2cset();
     register_i2cdump();
     register_dac_set();
+    register_ssd1306();
 }

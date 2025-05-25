@@ -107,9 +107,12 @@ void app_main(void)
     printf(" |  4. Try 'i2cget' to get the content of specific register   |\n");
     printf(" |  5. Try 'i2cset' to set the value of specific register     |\n");
     printf(" |  6. Try 'i2cdump' to dump all the register (Experiment)    |\n");
+    printf(" |  7. Try 'dac_set_output' to set DAC voltages               |\n");
     printf(" |                                                            |\n");
     printf(" ==============================================================\n\n");
 
+    #if CONFIG_EXAMPLE_GP8413_SDC
+    
     gp8413_init_params_t params = {
         .bus_handle = tool_bus_handle,
         .device_addr = GP8413_I2C_ADDRESS,
@@ -148,6 +151,7 @@ void app_main(void)
     ESP_LOGE(TAG, "OK initialize DAC");
 
     gp8413_deinit(&dac);
+#endif
 
     ESP_ERROR_CHECK(esp_console_start_repl(repl));
 }

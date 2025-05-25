@@ -13,7 +13,6 @@
 #include "ssd1306.h"           // SSD1306 OLED display driver
 #include <ssd1306_fonts.h>
 
-
 #include "font_petme128_8x8.h"
 // Logging tag for ESP-IDF
 static const char *TAG = "SSD1306";
@@ -48,7 +47,7 @@ static void ssd1306_write_cmd(ssd1306_handle_t *handle, uint8_t cmd)
     uint8_t data[2];
     data[0] = 0x80; // Indicate we're sending a command
     data[1] = cmd;
-    esp_err_t ret = i2c_master_transmit(*(handle->dev_handle), data, sizeof(data), pdMS_TO_TICKS(1000));
+    esp_err_t ret = i2c_master_transmit(handle->dev_handle, data, sizeof(data), pdMS_TO_TICKS(1000));
 
     if (ret != ESP_OK)
     {
@@ -65,7 +64,7 @@ static esp_err_t write_data_chunk(ssd1306_handle_t *handle, const uint8_t *data,
     memcpy(buf + 1, data, chunk_size); // Copy chunk data into buffer
 
     // Transmit data over I2C
-    return i2c_master_transmit(*(handle->dev_handle), buf, chunk_size + 1, pdMS_TO_TICKS(1000));
+    return i2c_master_transmit(handle->dev_handle, buf, chunk_size + 1, pdMS_TO_TICKS(1000));
 }
 
 static void ssd1306_write_data(ssd1306_handle_t *handle, const uint8_t *data, size_t length)
@@ -79,6 +78,7 @@ static void ssd1306_write_data(ssd1306_handle_t *handle, const uint8_t *data, si
 
         // Write the current chunk
         esp_err_t ret = write_data_chunk(handle, data + written, chunk_size);
+        //   ESP_LOGE(TAG, "Writing chunk of size %d, remaining %d bytes", chunk_size, remaining_length);
         if (ret != ESP_OK)
         {
             ESP_LOGE(TAG, "Error writing data block");
@@ -100,6 +100,23 @@ void ssd1306_init(ssd1306_handle_t *dev, uint8_t width, uint8_t height, uint8_t 
     dev->pages = height / 8;
 
     dev->external_vcc = external_vcc;
+
+    // attach the I2C device handle
+    i2c_device_config_t i2c_dev_conf = {
+        .scl_speed_hz = dev->scl_speed_hz,     // Set the I2C clock frequency
+        .device_address = dev->device_address, // Set the device address
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7, // Use 7-bit addressing
+    };
+    // Add the device to the I2C bus
+    esp_err_t ret = i2c_master_bus_add_device(dev->bus_handle, &i2c_dev_conf, &dev->dev_handle);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to add I2C device: %s", esp_err_to_name(ret));
+        return;
+    }
+    // Initialize the buffer to zero
+    memset(dev->buffer, 0, sizeof(dev->buffer));
+    // Initialize the SSD1306 display
 
     ssd1306_write_cmd(dev, SET_DISP | 0x00); // display off
     ssd1306_write_cmd(dev, SET_MEM_ADDR);
@@ -141,6 +158,21 @@ void ssd1306_init(ssd1306_handle_t *dev, uint8_t width, uint8_t height, uint8_t 
     ssd1306_fill(dev, 0x00);
     ssd1306_show(dev);
     ESP_LOGI(TAG, "SSD1306 initialized, W=%d, H=%d", width, height);
+}
+
+void ssd1306_deinit(ssd1306_handle_t *dev)
+{
+    assert(dev != NULL);
+    // Power off the display
+    // ssd1306_poweroff(dev);
+    // Clear the buffer
+    memset(dev->buffer, 0, sizeof(dev->buffer));
+    // Free the device handle if needed (not shown here)
+    if (i2c_master_bus_rm_device(dev->dev_handle) != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to remove I2C device");
+    }
+    ESP_LOGI(TAG, "SSD1306 deinitialized");
 }
 
 // POWER CONTROL
