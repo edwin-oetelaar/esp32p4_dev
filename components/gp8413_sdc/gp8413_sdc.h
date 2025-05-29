@@ -15,54 +15,62 @@ extern "C"
 #endif
 
 #include "driver/i2c_master.h"
+#include "esp_err.h"
 
-#define GP8413_REG_CONFIG_CURRENT (0x02) // Default register in GP8413
-#define GP8413_I2C_ADDRESS (0x59)        // Default I2C address
+// Default I2C address for the GP8413 device
+#define GP8413_I2C_ADDRESS (0x59) // Default I2C address for GP8413
 
-    typedef enum
+// GP8413 specific error codes
+#define ESP_ERR_GP8413_NOT_INITIALIZED (ESP_ERR_INVALID_STATE) // Device not initialized
+#define ESP_ERR_GP8413_INVALID_CHANNEL (ESP_ERR_INVALID_ARG)   // Invalid channel specified
+#define ESP_ERR_GP8413_INVALID_VOLTAGE (ESP_ERR_INVALID_ARG)   // Voltage outside valid range
+#define ESP_ERR_GP8413_COMMUNICATION (ESP_FAIL)                // Communication error with device
+
+      typedef enum
     {
         GP8413_OUTPUT_RANGE_5V = 5000,   // in millivolts
         GP8413_OUTPUT_RANGE_10V = 10000, // in millivolts
     } gp8413_output_range_t;
 
-    typedef enum
-    {
-        GP8413_CH_NONE = 0x00, // no channels
-        GP8413_CH0 = 0x01, // channel 1 only
-        GP8413_CH1 = 0x02, // channel 2 only
-        GP8413_CH0_CH1 = 0x01 + 0x02, // both channels
-    } gp8413_channel_t;
+    // Handle for the GP8413 device
 
     typedef struct
     {
         i2c_master_bus_handle_t bus_handle;
         uint8_t device_addr; // I2C device address (0x59)
         gp8413_output_range_t output_range;
+        uint32_t current_voltage_ch0; // Current voltage for channel 0 in millivolts
+        uint32_t current_voltage_ch1; // Current voltage for channel 1 in millivolts
+        bool initialized;             // Flag to track if the device is properly initialized
     } gp8413_handle_t;
 
-    // Define the parameter struct
+    // Configuration struct for GP8413 initialization
     typedef struct
     {
         i2c_master_bus_handle_t bus_handle;
-        uint8_t device_addr;
-        gp8413_output_range_t output_range;
-        uint32_t voltage_ch0;
-        uint32_t voltage_ch1;
-        gp8413_channel_t channel_type; // GP8413_CH0, GP8413_CH1, or GP8413_CH0_CH1
-    } gp8413_init_params_t;
-
-    // private functions
-    // [[maybe_unused]] static esp_err_t write_data_i2c(gp8413_handle_t *handle, uint8_t *data, size_t size);
+        uint8_t device_addr;                // I2C device address (default: GP8413_I2C_ADDRESS)
+        gp8413_output_range_t output_range; // Output voltage range (5V or 10V)
+        struct
+        {
+            uint32_t voltage; // Initial voltage for channel 0 in millivolts
+            bool enable;      // Whether to enable channel 0 during initialization
+        } channel0;
+        struct
+        {
+            uint32_t voltage; // Initial voltage for channel 1 in millivolts
+            bool enable;      // Whether to enable channel 1 during initialization
+        } channel1;
+    } gp8413_config_t;
 
     // public API functions
 
     /**
      * @brief Initialize the GP8413 device and return a handle.
      *
-     * @param params Initialization parameters.
+     * @param config Pointer to initialization configuration.
      * @return Pointer to gp8413_handle_t on success, NULL on failure.
      */
-    gp8413_handle_t *gp8413_init(gp8413_init_params_t *params);
+    gp8413_handle_t *gp8413_init(const gp8413_config_t *config);
 
     /**
      * @brief Deinitialize the GP8413 device and free its handle.
@@ -109,6 +117,34 @@ extern "C"
      * @note Be careful: storing non-zero values may cause the device to start up with outputs enabled.
      */
     esp_err_t gp8413_store_settings(gp8413_handle_t *handle); // not implemented yet
+
+    // /**
+    //  * @brief Get the current output voltage for a specific channel.
+    //  *
+    //  * @param handle Pointer to the GP8413 handle.
+    //  * @param channel Channel number (0 or 1).
+    //  * @param voltage Pointer to store the current voltage value.
+    //  * @return esp_err_t
+    //  */
+    // // esp_err_t gp8413_get_output_voltage(gp8413_handle_t *handle, uint32_t channel, uint32_t *voltage);
+
+    // /**
+    //  * @brief Reset the GP8413 device to default settings.
+    //  *
+    //  * @param handle Pointer to the GP8413 handle.
+    //  * @return esp_err_t
+    //  */
+    // esp_err_t gp8413_reset(gp8413_handle_t *handle);
+
+    // /**
+    //  * @brief Enable or disable a specific channel.
+    //  *
+    //  * @param handle Pointer to the GP8413 handle.
+    //  * @param channel Channel number (0 or 1).
+    //  * @param enable True to enable, false to disable.
+    //  * @return esp_err_t
+    //  */
+    // esp_err_t gp8413_set_channel_enable(gp8413_handle_t *handle, uint32_t channel, bool enable);
 
 #ifdef __cplusplus
 }

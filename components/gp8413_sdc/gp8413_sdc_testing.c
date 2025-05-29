@@ -2,8 +2,11 @@
 #include "esp_log.h"
 #include "esp_console.h"
 
-esp_err_t gp8413_sdc_testing1(gp8413_handle_t *dac)
+static const char *TAG = "GP8413_TEST";
+
+esp_err_t gp8413_sdc_ramp_test(gp8413_handle_t *dac)
 {
+    esp_err_t ret;
     uint32_t voltages1[] = {0, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000};
     uint32_t voltages2[] = {10000, 9000, 8000, 7000, 6000, 5000, 4000, 3000, 2000, 1000, 0};
 
@@ -31,7 +34,7 @@ esp_err_t gp8413_sdc_testing1(gp8413_handle_t *dac)
     return ESP_OK;
 }
 
-esp_err_t gp8413_sdc_testing1(gp8413_handle_t *dac)
+esp_err_t gp8413_sdc_zero_test(gp8413_handle_t *dac)
 {
 
     esp_err_t ret = gp8413_set_output_voltage(dac, 0, 0);
@@ -55,28 +58,68 @@ esp_err_t gp8413_sdc_testing1(gp8413_handle_t *dac)
     return ESP_OK;
 }
 
-esp_err_t gp8413_dgp8413_sdc_set_output_voltage1(tool_bus_handle_t *tool_bus_handle)
+esp_err_t gp8413_sdc_set_output_voltage_ch0(i2c_master_bus_handle_t *bus_handle, uint32_t voltage)
 {
-    gp8413_handle_t *dac = gp8413_init(tool_bus_handle, GP8413_I2C_ADDRESS, GP8413_OUTPUT_RANGE_10V, 0, 0);
+    gp8413_config_t config = {
+        .bus_handle = *bus_handle,
+        .device_addr = GP8413_I2C_ADDRESS,
+        .output_range = GP8413_OUTPUT_RANGE_10V,
+        .channel0 = {
+            .voltage = 0,
+            .enable = true,
+        },
+        .channel1 = {
+            .voltage = 0,
+            .enable = false,
+        }};
+
+    gp8413_handle_t *dac = gp8413_init(&config);
     if (dac == NULL)
     {
         ESP_LOGE(TAG, "Failed to initialize DAC");
         return ESP_ERR_INVALID_ARG;
     }
     ESP_LOGI(TAG, "DAC initialized successfully");
-    ret = gp8413_set_output_voltage(dac, voltage, 0);
+
+    esp_err_t ret = gp8413_set_output_voltage(dac, voltage, 0);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to set voltage on channel 0: %s", esp_err_to_name(ret));
+    }
+
     gp8413_deinit(&dac);
+    return ret;
 }
 
-esp_err_t gp8413_sdc_set_output_voltage2(tool_bus_handle_t *tool_bus_handle)
+esp_err_t gp8413_sdc_set_output_voltage_ch1(i2c_master_bus_handle_t *bus_handle, uint32_t voltage)
 {
-    gp8413_handle_t *dac = gp8413_init(tool_bus_handle, GP8413_I2C_ADDRESS, GP8413_OUTPUT_RANGE_10V, 0, 0);
+    gp8413_config_t config = {
+        .bus_handle = *bus_handle,
+        .device_addr = GP8413_I2C_ADDRESS,
+        .output_range = GP8413_OUTPUT_RANGE_10V,
+        .channel0 = {
+            .voltage = 0,
+            .enable = false,
+        },
+        .channel1 = {
+            .voltage = voltage, // Set initial voltage for channel 1
+            .enable = true,
+        }};
+
+    gp8413_handle_t *dac = gp8413_init(&config);
     if (dac == NULL)
     {
         ESP_LOGE(TAG, "Failed to initialize DAC");
         return ESP_ERR_INVALID_ARG;
     }
     ESP_LOGI(TAG, "DAC initialized successfully");
-    ret = gp8413_set_output_voltage(dac, voltages, 1);
+
+    esp_err_t ret = gp8413_set_output_voltage(dac, voltage, 1); // Set voltage on channel 1
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to set voltage on channel 1: %s", esp_err_to_name(ret));
+    }
+
     gp8413_deinit(&dac);
+    return ret;
 }

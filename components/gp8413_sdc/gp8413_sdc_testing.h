@@ -4,7 +4,7 @@
  * GP8413 Device Driver Testing Header
  *
  * Project: SDC2025
- * Author: Edwin van den Oetelaar (e.vandenoetelaar@fonyts.nl / edwin@oetelaar.com)
+ * Author: Edwin van den Oetelaar (e.vandenoetelaar@fontys.nl / edwin@oetelaar.com)
  * License: MIT
  *
  * Provides testing functions for the GP8413 DAC device.

@@ -18,6 +18,21 @@
 #define I2C_TOOL_TIMEOUT_VALUE_MS (50)
 static uint32_t i2c_frequency = 100 * 1000;
 
+// PRIVATE Device definitions
+typedef enum
+{
+    GP8413_REG_RANGE = 0x01,       // Range register in GP8413 (both channels)
+    GP8413_REG_CH0_VOLTAGE = 0x02, // Channel 1 voltage register
+    GP8413_REG_CH1_VOLTAGE = 0x04, // Channel 1 voltage register
+} gp8413_register_t;
+
+// Define range codes using an enum
+typedef enum
+{
+    GP8413_RANGE_CODE_5V = 0x55,
+    GP8413_RANGE_CODE_10V = 0x77
+} gp8413_range_code_t;
+
 // Helper macro for input validation
 #define CHECK_HANDLE(h)                 \
     do                                  \
@@ -39,7 +54,6 @@ static uint32_t i2c_frequency = 100 * 1000;
         if ((r) != GP8413_OUTPUT_RANGE_5V && (r) != GP8413_OUTPUT_RANGE_10V) \
             return ESP_ERR_INVALID_ARG;                                      \
     } while (0)
-
 
 // Write data to the GP8413 device over I2C.
 // This function creates a temporary I2C device handle for the transaction,
@@ -81,21 +95,21 @@ static esp_err_t write_data_i2c(gp8413_handle_t *handle, uint8_t *data, size_t s
 }
 
 // Initialize the GP8413 device and return a handle
-gp8413_handle_t *gp8413_init(gp8413_init_params_t *params)
+gp8413_handle_t *gp8413_init(const gp8413_config_t *config)
 {
     // Check if params is valid
-    if (!params || !params->bus_handle)
+    if (!config || !config->bus_handle)
     {
         ESP_LOGE(TAG, "Invalid initialization parameters");
         return NULL; // no parameters or bus handle
     }
 
     // Extract parameters from the struct
-    i2c_master_bus_handle_t bus_handle = params->bus_handle;
-    uint8_t device_addr = params->device_addr;
-    gp8413_output_range_t output_range = params->output_range;
-    uint32_t voltage_ch0 = params->voltage_ch0;
-    uint32_t voltage_ch1 = params->voltage_ch1;
+    i2c_master_bus_handle_t bus_handle = config->bus_handle;
+    uint8_t device_addr = config->device_addr;
+    gp8413_output_range_t output_range = config->output_range;
+    uint32_t voltage_ch0 = config->channel0.voltage;
+    uint32_t voltage_ch1 = config->channel1.voltage;
 
     // Allocate memory for the device handle
     gp8413_handle_t *handle = calloc(1, sizeof(gp8413_handle_t));
@@ -126,6 +140,7 @@ gp8413_handle_t *gp8413_init(gp8413_init_params_t *params)
         return NULL;
     }
 
+    handle->initialized = true; // Mark the handle as initialized
     // Return the initialized handle
     return handle;
 }
@@ -136,7 +151,14 @@ void gp8413_deinit(gp8413_handle_t **handle)
     {
         // Optionally, store settings to device here
         // Example: gp8413_store_settings(*handle);
-
+        if ((*handle)->initialized)
+        {
+            ESP_LOGI(TAG, "Deinitializing GP8413 device");
+        }
+        else
+        {
+            ESP_LOGW(TAG, "GP8413 device was not initialized");
+        }
         // Free the handle memory
         free(*handle);
         *handle = NULL; // Set pointer to NULL to avoid dangling pointer
@@ -148,9 +170,25 @@ esp_err_t gp8413_set_output_range(gp8413_handle_t *handle, gp8413_output_range_t
     CHECK_HANDLE(handle);
     CHECK_RANGE(range);
 
+    if (handle->initialized && handle->output_range == range)
+    {
+        ESP_LOGI(TAG, "Output range already set to %d mV", handle->output_range);
+        return ESP_OK; // No change needed
+    }
+    // If the handle is already initialized, update the output range
+    if (handle->initialized)
+    {
+        ESP_LOGI(TAG, "Updating output range from %d mV to %d mV", handle->output_range, range);
+    }
+    else
+    {
+        ESP_LOGI(TAG, "Setting output range to %d mV", range);
+    }
+    // Update the output range in the handle
+
     handle->output_range = range;
-    uint8_t reg = 0x01;        // register address for output range
-    uint8_t range_code = 0x00; // default range code
+    uint8_t reg = GP8413_REG_RANGE; // register address for output range
+    uint8_t range_code = 0x00;      // default range code
 
     if (handle->output_range == GP8413_OUTPUT_RANGE_5V)
     {
@@ -189,6 +227,12 @@ esp_err_t gp8413_set_output_voltage(gp8413_handle_t *handle, uint32_t voltage, u
 {
     CHECK_HANDLE(handle);
     CHECK_CHANNEL(channel);
+    // check if output range is set
+    if (handle->output_range == 0)
+    {
+        ESP_LOGE(TAG, "Output range not set, please set it first");
+        return ESP_ERR_INVALID_STATE; // Output range not set
+    }
 
     // Clamp voltage to range
     uint32_t max_mv = (uint32_t)handle->output_range;
@@ -196,7 +240,7 @@ esp_err_t gp8413_set_output_voltage(gp8413_handle_t *handle, uint32_t voltage, u
         voltage = max_mv;
 
     // Select register address for channel 0 or 1
-    uint8_t data_addr = (channel == 0) ? 0x02 : 0x04;
+    uint8_t data_addr = (channel == 0) ? GP8413_REG_CH0_VOLTAGE : GP8413_REG_CH1_VOLTAGE;
 
     // Convert voltage to 16-bit word (0-32767)
     uint16_t word = (uint16_t)(32767 * voltage / max_mv);
@@ -216,6 +260,12 @@ esp_err_t gp8413_set_output_voltage(gp8413_handle_t *handle, uint32_t voltage, u
 esp_err_t gp8413_set_output_voltage_dual(gp8413_handle_t *handle, uint32_t voltage_ch0, uint32_t voltage_ch1)
 {
     CHECK_HANDLE(handle);
+    // check if output range is set
+    if (handle->output_range == 0)
+    {
+        ESP_LOGE(TAG, "Output range not set, please set it first");
+        return ESP_ERR_INVALID_STATE; // Output range not set
+    }
 
     // Clamp voltages
     uint32_t max_mv = (uint32_t)handle->output_range;
@@ -225,7 +275,7 @@ esp_err_t gp8413_set_output_voltage_dual(gp8413_handle_t *handle, uint32_t volta
         voltage_ch1 = max_mv;
 
     // Convert voltages to 15-bit words (0-32767)
-    int data_addr = 0x02; // register start for 0 and 1 channel (16 bits each)
+    int data_addr = GP8413_REG_CH0_VOLTAGE; // register start for 0 and 1 channel (16 bits each)
 
     uint16_t word0 = 32767 * voltage_ch0 / max_mv;
     uint16_t word1 = 32767 * voltage_ch1 / max_mv;

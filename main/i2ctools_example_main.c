@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "sdkconfig.h"
+#include <esp_timer.h>
 #include "esp_log.h"
 #include "esp_console.h"
 #include "esp_vfs_fat.h"
@@ -113,16 +114,21 @@ void app_main(void)
 
     #if CONFIG_EXAMPLE_GP8413_SDC
     
-    gp8413_init_params_t params = {
+    gp8413_config_t config = {
         .bus_handle = tool_bus_handle,
         .device_addr = GP8413_I2C_ADDRESS,
         .output_range = GP8413_OUTPUT_RANGE_10V,
-        .voltage_ch0 = 0,
-        .voltage_ch1 = 0,
-        .channel_type = GP8413_CH0_CH1 // both channels
+        .channel0 = {
+            .voltage = 0,
+            .enable = true
+        },
+        .channel1 = {
+            .voltage = 0,
+            .enable = true
+        }
     };
 
-    gp8413_handle_t *dac = gp8413_init(&params);
+    gp8413_handle_t *dac = gp8413_init(&config);
     if (dac == NULL)
     {
         ESP_LOGE(TAG, "Failed to initialize DAC");
@@ -152,6 +158,7 @@ void app_main(void)
 
     gp8413_deinit(&dac);
 #endif
-
+    // Register system commands
+    printf("timer : %lld\r\n",esp_timer_get_time());
     ESP_ERROR_CHECK(esp_console_start_repl(repl));
 }

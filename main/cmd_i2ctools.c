@@ -53,33 +53,40 @@ static int do_i2cconfig_cmd(int argc, char **argv)
     i2c_port_t i2c_port = I2C_NUM_0;
     int i2c_gpio_sda = 0;
     int i2c_gpio_scl = 0;
-    if (nerrors != 0)
-    {
+    
+    if (nerrors != 0) {
         arg_print_errors(stderr, i2cconfig_args.end, argv[0]);
         return 0;
     }
 
-    /* Check "--port" option */
-    if (i2cconfig_args.port->count)
-    {
-        if (i2c_get_port(i2cconfig_args.port->ival[0], &i2c_port) != ESP_OK)
-        {
+    if (i2cconfig_args.port->count) {
+        if (i2c_get_port(i2cconfig_args.port->ival[0], &i2c_port) != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to configure I2C port");
             return 1;
         }
     }
-    /* Check "--freq" option */
-    if (i2cconfig_args.freq->count)
-    {
-        i2c_frequency = i2cconfig_args.freq->ival[0];
+
+    if (i2cconfig_args.freq->count) {
+        uint32_t freq = i2cconfig_args.freq->ival[0];
+        if (freq < 4000 || freq > 1000000) {
+            ESP_LOGE(TAG, "Invalid frequency value (4000->1000000)");
+            return 1;
+        }
+        i2c_frequency = freq;
     }
-    /* Check "--sda" option */
+
     i2c_gpio_sda = i2cconfig_args.sda->ival[0];
-    /* Check "--scl" option */
     i2c_gpio_scl = i2cconfig_args.scl->ival[0];
 
-    // re-init the bus
-    if (i2c_del_master_bus(tool_bus_handle) != ESP_OK)
-    {
+    // Validate GPIO pins
+    if ((i2c_gpio_sda >= GPIO_NUM_MAX) || (i2c_gpio_scl >= GPIO_NUM_MAX)) {
+        ESP_LOGE(TAG, "Invalid GPIO pins");
+        return 1;
+    }
+
+    esp_err_t err = i2c_del_master_bus(tool_bus_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to delete existing I2C bus");
         return 1;
     }
 
@@ -92,8 +99,9 @@ static int do_i2cconfig_cmd(int argc, char **argv)
         .flags.enable_internal_pullup = true,
     };
 
-    if (i2c_new_master_bus(&i2c_bus_config, &tool_bus_handle) != ESP_OK)
-    {
+    err = i2c_new_master_bus(&i2c_bus_config, &tool_bus_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to create new I2C bus");
         return 1;
     }
 
@@ -459,47 +467,42 @@ static int do_dacset_cmd(int argc, char **argv)
         return 0;
     }
 
-    uint32_t ch0_val = 0;
-    uint32_t ch1_val = 0;
-    gp8413_channel_t channel_type = GP8413_CH_NONE;
-    if (dacset_args.ch0_val->count == 0 && dacset_args.ch1_val->count == 0)
+    gp8413_config_t config = {
+        .bus_handle = tool_bus_handle,
+        .device_addr = GP8413_I2C_ADDRESS,
+        .output_range = GP8413_OUTPUT_RANGE_10V,
+        .channel0 = {
+            .voltage = 0,
+            .enable = false
+        },
+        .channel1 = {
+            .voltage = 0,
+            .enable = false
+        }
+    };
+
+    // if (dacset_args.ch0_val->count == 0 && dacset_args.ch1_val->count == 0)
+    // {
+    //     ESP_LOGE(TAG, "No output value specified for channel 0 or channel 1");
+    //     return 1;
+    // }
+    //
+    if (dacset_args.ch0_val->count == 1)
     {
-        ESP_LOGE(TAG, "No output value specified for channel 1 or channel 2");
-        return 1;
-    }
-    if (dacset_args.ch0_val->count == 1 && dacset_args.ch1_val->count == 1)
-    {
-        channel_type = GP8413_CH0_CH1;
-        ch0_val = dacset_args.ch0_val->ival[0];
-        ch1_val = dacset_args.ch1_val->ival[0];
-    }
-    else if (dacset_args.ch0_val->count == 1)
-    {
-        channel_type = GP8413_CH0;
-        ch0_val = dacset_args.ch0_val->ival[0];
+        config.channel0.voltage = dacset_args.ch0_val->ival[0];
+        config.channel0.enable=true;
     }
     else if (dacset_args.ch1_val->count == 1)
     {
-        channel_type = GP8413_CH1;
-        ch1_val = dacset_args.ch1_val->ival[0];
+        config.channel1.voltage = dacset_args.ch1_val->ival[0];
+        config.channel1.enable=true;
     }
 
-    if (ch0_val > 10000 || ch1_val > 10000)
+    if (config.channel0.voltage > 10000 || config.channel1.voltage > 10000)
     {
         ESP_LOGE(TAG, "Output voltage must be between 0 and 10000 mV");
         return 1;
     }
-
-    ESP_LOGI(TAG, "Setting output voltage to %d mV on channel 1", ch0_val);
-    ESP_LOGI(TAG, "Setting output voltage to %d mV on channel 2", ch1_val);
-
-    gp8413_init_params_t init_params = {
-        .bus_handle = tool_bus_handle,
-        .device_addr = GP8413_I2C_ADDRESS,
-        .output_range = GP8413_OUTPUT_RANGE_10V,
-        .voltage_ch0 = ch0_val,
-        .voltage_ch1 = ch1_val,
-        .channel_type = channel_type};
 
     ESP_LOGI(TAG, "Initializing DAC with parameters: "
                   "Device Address: 0x%02x, "
@@ -507,36 +510,35 @@ static int do_dacset_cmd(int argc, char **argv)
                   "Channel Type: %d, "
                   "Channel 0 Voltage: %d mV, "
                   "Channel 1 Voltage: %d mV",
-             init_params.device_addr,
-             init_params.output_range,
-             init_params.channel_type,
-             init_params.voltage_ch0,
-             init_params.voltage_ch1);
+             config.device_addr,
+             config.output_range,
+             config.channel0.voltage,
+             config.channel1.voltage);
 
-    gp8413_handle_t *dac = gp8413_init(&init_params);
+    gp8413_handle_t *dac = gp8413_init(&config);
     if (dac == NULL)
     {
         ESP_LOGE(TAG, "Failed to initialize DAC");
         return 1;
     }
-    ESP_LOGI(TAG, "DAC initialized successfully");
-    esp_err_t ret = gp8413_set_output_voltage(dac, ch0_val, 0);
-    if (ret != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Failed to set output voltage for channel 0: %s", esp_err_to_name(ret));
-        gp8413_deinit(&dac);
-        return 1;
-    }
-    ret = gp8413_set_output_voltage(dac, ch1_val, 1);
-    if (ret != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Failed to set output voltage for channel 1: %s", esp_err_to_name(ret));
-        gp8413_deinit(&dac);
-        return 1;
-    }
+    // ESP_LOGI(TAG, "DAC initialized successfully");
+    // esp_err_t ret = gp8413_set_output_voltage(dac, ch0_val, 0);
+    // if (ret != ESP_OK)
+    // {
+    //     ESP_LOGE(TAG, "Failed to set output voltage for channel 0: %s", esp_err_to_name(ret));
+    //     gp8413_deinit(&dac);
+    //     return 1;
+    // }
+    // ret = gp8413_set_output_voltage(dac, ch1_val, 1);
+    // if (ret != ESP_OK)
+    // {
+    //     ESP_LOGE(TAG, "Failed to set output voltage for channel 1: %s", esp_err_to_name(ret));
+    //     gp8413_deinit(&dac);
+    //     return 1;
+    // }
     ESP_LOGI(TAG, "Output voltage set successfully");
-    ESP_LOGI(TAG, "Setting output voltage to %d mV on channel 0", ch0_val);
-    ESP_LOGI(TAG, "Setting output voltage to %d mV on channel 1", ch1_val);
+    // ESP_LOGI(TAG, "Setting output voltage to %d mV on channel 0", ch0_val);
+    // ESP_LOGI(TAG, "Setting output voltage to %d mV on channel 1", ch1_val);
     gp8413_deinit(&dac);
     return 0;
 }
@@ -572,12 +574,7 @@ static int do_ssd1306_cmd(int argc, char **argv)
 
     uint32_t ch0_val = ssdset_args.ch0_val->ival[0];
     ESP_LOGI(TAG, "Setting SSD1306 display text to: %d", ch0_val);
-    // Here you would typically call a function to set the text on the SSD1306 display
-    // For example: ssd1306_set_text(ch0_val);
-
-    // ssd1306_handle_t ssd1306_handle = {0};
-    // ssd1306_handle.tool_bus_handle = tool_bus_handle;
-    // ssd1306_handle.device_address = SSD1306_I2C_ADDRESS;
+   
     ssd1306_handle_t dev = {
         .bus_handle = tool_bus_handle,
         // Assuming tool_bus_handle is already initialized and points to the I2C bus
@@ -606,11 +603,6 @@ static int do_ssd1306_cmd(int argc, char **argv)
     ssd1306_show(&dev);                       // Show the drawn string on the display
     ESP_LOGI(TAG, "SSD1306 display updated with text: %s", buf);
 
-    //    ssd1306_fill(&dev, 1);
-    //    ssd1306_show(&dev); // Show the filled display
-    //    ESP_LOGI(TAG, "SSD1306 display filled with white color");
-
-    // vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for 1 second to see the filled display
     ssd1306_deinit(&dev); // Deinitialize the display after use
     ESP_LOGI(TAG, "SSD1306 display deinitialized successfully");
     return 0;

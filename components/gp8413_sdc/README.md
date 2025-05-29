@@ -2,7 +2,8 @@
 
 ## Overview
 
-This component provides a driver for the GP8413 Digital-to-Analog Converter (DAC) device. The GP8413 is a dual-channel, high-precision DAC that can be controlled via I2C interface.
+This component provides a driver for the GP8413 Digital-to-Analog Converter (DAC) device. 
+The GP8413 is a dual-channel, high-precision DAC that can be controlled via I2C interface.
 
 ## Features
 
