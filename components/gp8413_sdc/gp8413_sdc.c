@@ -13,7 +13,7 @@
 #include "esp_log.h"
 
 #define TAG "GP8413_SDC"
-#define GP8413_CHANNEL_MAX 2
+#define GP8413_CHANNEL_MAX 1 /* 0 and 1 are valid */
 
 #define I2C_TOOL_TIMEOUT_VALUE_MS (50)
 static uint32_t i2c_frequency = 100 * 1000;
@@ -44,7 +44,7 @@ typedef enum
 #define CHECK_CHANNEL(ch)               \
     do                                  \
     {                                   \
-        if ((ch) >= GP8413_CHANNEL_MAX) \
+        if ((ch) > GP8413_CHANNEL_MAX || ((int)(ch)) < 0)  \
             return ESP_ERR_INVALID_ARG; \
     } while (0)
 
@@ -59,7 +59,7 @@ typedef enum
 // This function creates a temporary I2C device handle for the transaction,
 // sends the provided data buffer, and then removes the device handle.
 // Returns ESP_OK on success, or an error code on failure.
-static esp_err_t write_data_i2c(gp8413_handle_t *handle, uint8_t *data, size_t size)
+static esp_err_t write_data_i2c(const gp8413_handle_t *handle, uint8_t *data, size_t size)
 {
     i2c_device_config_t i2c_dev_conf = {
         .scl_speed_hz = i2c_frequency,
