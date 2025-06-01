@@ -203,7 +203,7 @@ void ssd1306_invert(ssd1306_handle_t *dev, uint8_t invert)
     ssd1306_write_cmd(dev, SET_NORM_INV | (invert & 0x01));
 }
 
-// BUFFER FILL AND UPDATE (SHOW)
+// BUFFER FILL
 void ssd1306_fill(ssd1306_handle_t *dev, uint8_t color)
 {
     assert(dev != 0);
@@ -224,7 +224,7 @@ void ssd1306_set_pixel(ssd1306_handle_t *dev, unsigned int x, unsigned int y, ui
         dev->buffer[((y & 0xf8) << 4) + x] &= ~(1 << (y & 7)); // unset bit
 }
 
-// copy buffer to i2c display
+// copy buffer to i2c display (SHOW)
 void ssd1306_show(ssd1306_handle_t *dev)
 {
     assert(dev != NULL);
@@ -321,7 +321,7 @@ uint8_t ssd1306_printFixed8(ssd1306_handle_t *dev, uint8_t xpos, uint8_t ypos, u
 
         int32_t font_table_index = (current_char - FONT_CHAR_START) * fontheight;
         // Validate font table index
-        if (font_table_index < 0 || font_table_index >= ARRAY_SIZE(font_petme128_8x8))
+        if (font_table_index < 0 || font_table_index >= (sizeof(font_petme128_8x8)/sizeof(font_petme128_8x8[0])))
         {
             continue; // Skip if index out of bounds
         }

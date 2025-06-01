@@ -26,7 +26,7 @@ extern "C"
 #define ESP_ERR_GP8413_INVALID_VOLTAGE (ESP_ERR_INVALID_ARG)   // Voltage outside valid range
 #define ESP_ERR_GP8413_COMMUNICATION (ESP_FAIL)                // Communication error with device
 
-      typedef enum
+    typedef enum
     {
         GP8413_OUTPUT_RANGE_5V = 5000,   // in millivolts
         GP8413_OUTPUT_RANGE_10V = 10000, // in millivolts

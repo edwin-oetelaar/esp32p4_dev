@@ -20,6 +20,7 @@
 #include "esp_log.h"
 #include "gp8413_sdc.h"
 #include "ssd1306.h"
+#include "m5_4relay.h"
 
 static const char *TAG = "cmd_i2ctools";
 
@@ -53,22 +54,27 @@ static int do_i2cconfig_cmd(int argc, char **argv)
     i2c_port_t i2c_port = I2C_NUM_0;
     int i2c_gpio_sda = 0;
     int i2c_gpio_scl = 0;
-    
-    if (nerrors != 0) {
+
+    if (nerrors != 0)
+    {
         arg_print_errors(stderr, i2cconfig_args.end, argv[0]);
         return 0;
     }
 
-    if (i2cconfig_args.port->count) {
-        if (i2c_get_port(i2cconfig_args.port->ival[0], &i2c_port) != ESP_OK) {
+    if (i2cconfig_args.port->count)
+    {
+        if (i2c_get_port(i2cconfig_args.port->ival[0], &i2c_port) != ESP_OK)
+        {
             ESP_LOGE(TAG, "Failed to configure I2C port");
             return 1;
         }
     }
 
-    if (i2cconfig_args.freq->count) {
+    if (i2cconfig_args.freq->count)
+    {
         uint32_t freq = i2cconfig_args.freq->ival[0];
-        if (freq < 4000 || freq > 1000000) {
+        if (freq < 4000 || freq > 1000000)
+        {
             ESP_LOGE(TAG, "Invalid frequency value (4000->1000000)");
             return 1;
         }
@@ -79,13 +85,15 @@ static int do_i2cconfig_cmd(int argc, char **argv)
     i2c_gpio_scl = i2cconfig_args.scl->ival[0];
 
     // Validate GPIO pins
-    if ((i2c_gpio_sda >= GPIO_NUM_MAX) || (i2c_gpio_scl >= GPIO_NUM_MAX)) {
+    if ((i2c_gpio_sda >= GPIO_NUM_MAX) || (i2c_gpio_scl >= GPIO_NUM_MAX))
+    {
         ESP_LOGE(TAG, "Invalid GPIO pins");
         return 1;
     }
 
     esp_err_t err = i2c_del_master_bus(tool_bus_handle);
-    if (err != ESP_OK) {
+    if (err != ESP_OK)
+    {
         ESP_LOGE(TAG, "Failed to delete existing I2C bus");
         return 1;
     }
@@ -100,7 +108,8 @@ static int do_i2cconfig_cmd(int argc, char **argv)
     };
 
     err = i2c_new_master_bus(&i2c_bus_config, &tool_bus_handle);
-    if (err != ESP_OK) {
+    if (err != ESP_OK)
+    {
         ESP_LOGE(TAG, "Failed to create new I2C bus");
         return 1;
     }
@@ -473,13 +482,8 @@ static int do_dacset_cmd(int argc, char **argv)
         .output_range = GP8413_OUTPUT_RANGE_10V,
         .channel0 = {
             .voltage = 0,
-            .enable = false
-        },
-        .channel1 = {
-            .voltage = 0,
-            .enable = false
-        }
-    };
+            .enable = false},
+        .channel1 = {.voltage = 0, .enable = false}};
 
     // if (dacset_args.ch0_val->count == 0 && dacset_args.ch1_val->count == 0)
     // {
@@ -490,12 +494,12 @@ static int do_dacset_cmd(int argc, char **argv)
     if (dacset_args.ch0_val->count == 1)
     {
         config.channel0.voltage = dacset_args.ch0_val->ival[0];
-        config.channel0.enable=true;
+        config.channel0.enable = true;
     }
     else if (dacset_args.ch1_val->count == 1)
     {
         config.channel1.voltage = dacset_args.ch1_val->ival[0];
-        config.channel1.enable=true;
+        config.channel1.enable = true;
     }
 
     if (config.channel0.voltage > 10000 || config.channel1.voltage > 10000)
@@ -574,7 +578,7 @@ static int do_ssd1306_cmd(int argc, char **argv)
 
     uint32_t ch0_val = ssdset_args.ch0_val->ival[0];
     ESP_LOGI(TAG, "Setting SSD1306 display text to: %d", ch0_val);
-   
+
     ssd1306_handle_t dev = {
         .bus_handle = tool_bus_handle,
         // Assuming tool_bus_handle is already initialized and points to the I2C bus
@@ -621,6 +625,221 @@ static void register_ssd1306(void)
     ESP_ERROR_CHECK(esp_console_cmd_register(&ssdset_cmd));
 }
 
+// m54r_console.c
+// ESP32-IDF console commands for M5 4-Relay board
+// Edwin vd Oetelaar, juni 2025
+
+// static const char *TAG = "m54r_console";
+
+/* Externe, elders geïnitialiseerde I2C-bus-handle en klokfrequentie */
+// extern i2c_master_bus_handle_t tool_bus_handle;
+// extern uint32_t i2c_frequency;
+
+////////////////////////////////////////////////////////////////////////////////
+// Argumentstructuur
+////////////////////////////////////////////////////////////////////////////////
+static struct
+{
+    struct arg_int *relay; // --relay <index>
+    struct arg_int *set;   // --set <0|1>
+    struct arg_lit *get;   // --get
+    struct arg_int *led;   // --led <index>
+    struct arg_int *mode;  // --mode <0|1>
+    struct arg_end *end;   // argstructuur afsluiting
+} m54r_args;
+
+////////////////////////////////////////////////////////////////////////////////
+// Commandofunctie
+////////////////////////////////////////////////////////////////////////////////
+static int do_m54r_cmd(int argc, char **argv)
+{
+    int nerrors = arg_parse(argc, argv, (void **)&m54r_args);
+    if (nerrors != 0)
+    {
+        arg_print_errors(stderr, m54r_args.end, argv[0]);
+        return 0;
+    }
+
+    // Maak en initialiseer device-handle
+    // de scope is de stack, dus we moeten de handle niet vrijgeven
+    m54_ctx_t dev = {
+        .device_address = M54R_ADDR,
+        .bus_handle = tool_bus_handle, // Externe I2C-bus-handle
+        .dev_handle = NULL,            // Wordt ingesteld in m54r_init
+        .scl_speed_hz = i2c_frequency,
+        .initialized = 0,    // Initieel niet geïnitialiseerd
+        .relay_state = 0x00, // Initieel alle relays UIT
+        .led_state = 0x00,   // Initieel alle LEDs UIT
+        0};
+
+    esp_err_t err = m54_init(&dev);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "m54r_init mislukt: %s", esp_err_to_name(err));
+        return 1;
+    }
+
+    // 1) Relay Set
+    if (m54r_args.relay->count && m54r_args.set->count)
+    {
+        int idx = m54r_args.relay->ival[0];
+        int state = m54r_args.set->ival[0];
+        if (idx < 0 || idx > 3 || (state != 0 && state != 1))
+        {
+            ESP_LOGE(TAG, "Ongeldige --relay of --set waarde");
+        }
+        else
+        {
+            err = m54_relay_set(&dev, (uint8_t)idx, (bool)state);
+            if (err == ESP_OK)
+            {
+                ESP_LOGI(TAG, "Relay %d %s", idx, state ? "AAN" : "UIT");
+            }
+            else
+            {
+                ESP_LOGE(TAG, "Relay %d schakelen mislukt: %s", idx, esp_err_to_name(err));
+            }
+        }
+    }
+    // 2) Relay Get
+    else if (m54r_args.relay->count && m54r_args.get->count)
+    {
+        int idx = m54r_args.relay->ival[0];
+        if (idx < 0 || idx > 3)
+        {
+            ESP_LOGE(TAG, "Ongeldige --relay waarde");
+        }
+        else
+        {
+            uint8_t reg_val = 0;
+            err = m54_relay_get(&dev, idx, &reg_val);
+            if (err == ESP_OK)
+            {
+                bool state = (reg_val) ? true : false;
+                printf("Relay %d status: %s\n", idx, state ? "AAN" : "UIT");
+            }
+            else
+            {
+                ESP_LOGE(TAG, "Relay-status lezen mislukt: %s", esp_err_to_name(err));
+            }
+        }
+    }
+
+    // 3) LED Set
+    if (m54r_args.led->count && m54r_args.set->count)
+    {
+        int idx = m54r_args.led->ival[0];
+        int state = m54r_args.set->ival[0];
+        if (idx < 0 || idx > 3 || (state != 0 && state != 1))
+        {
+            ESP_LOGE(TAG, "Ongeldige --led of --set waarde");
+        }
+        else
+        {
+            err = m54_led_set(&dev, (uint8_t)idx, (bool)state);
+            if (err == ESP_OK)
+            {
+                ESP_LOGI(TAG, "LED %d %s", idx, state ? "AAN" : "UIT");
+            }
+            else
+            {
+                ESP_LOGE(TAG, "LED %d schakelen mislukt: %s", idx, esp_err_to_name(err));
+            }
+        }
+    }
+    // 4) LED Get
+    else if (m54r_args.led->count && m54r_args.get->count)
+    {
+        int idx = m54r_args.led->ival[0];
+        if (idx < 0 || idx > 3)
+        {
+            ESP_LOGE(TAG, "Ongeldige --led waarde");
+        }
+        else
+        {
+            uint8_t reg_val = 0;
+            err = m54_led_get(&dev, idx, &reg_val);
+            if (err == ESP_OK)
+            {
+                bool state = (reg_val) ? true : false;
+                printf("LED %d status: %s\n", idx, state ? "AAN" : "UIT");
+            }
+            else
+            {
+                ESP_LOGE(TAG, "LED-status lezen mislukt: %s", esp_err_to_name(err));
+            }
+        }
+    }
+
+    // 5) Mode Set
+    if (m54r_args.mode->count)
+    {
+        int mode_val = m54r_args.mode->ival[0];
+        if (mode_val != 0 && mode_val != 1)
+        {
+            ESP_LOGE(TAG, "Ongeldige --mode waarde (0 of 1 verwacht)");
+        }
+        else
+        {
+            err = m54_mode_set(&dev, mode_val);
+            if (err == ESP_OK)
+            {
+                ESP_LOGI(TAG, "Mode gezet op: %s", mode_val ? "Automatisch" : "Manueel");
+            }
+            else
+            {
+                ESP_LOGE(TAG, "Mode instellen mislukt: %s", esp_err_to_name(err));
+            }
+        }
+    }
+
+    // Sluit af
+    m54_deinit(&dev);
+    return 0;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Registratiefunctie
+////////////////////////////////////////////////////////////////////////////////
+static void register_m54r(void)
+{
+    // --relay <index>
+    m54r_args.relay = arg_int0("r", "relay", "<0-3>", "Relaynumer (0 t/m 3)");
+    // --set <0|1>
+    m54r_args.set = arg_int0("s", "set", "<0-1>", "0=UIT, 1=AAN");
+    // --get (flag, geen parameter)
+    m54r_args.get = arg_lit0("g", "get", "Geef status terug");
+
+    // --led <index>
+    m54r_args.led = arg_int0("l", "led", "<0-3>", "LED-nummer (0 t/m 3)");
+
+    // --mode <0|1>
+    m54r_args.mode = arg_int0("m", "mode", "<0-1>", "0=Manueel, 1=Automatisch");
+
+    // Argstructuur afsluiting (max 1 foutmelding)
+    m54r_args.end = arg_end(1);
+
+    const esp_console_cmd_t cmd = {
+        .command = "m54r",
+        .help = "Schakel relais en LED's, en stel bedieningsmodus in:\n"
+                "  --relay <0-3> --set <0|1>\n"
+                "  --relay <0-3> --get\n"
+                "  --led   <0-3> --set <0|1>\n"
+                "  --led   <0-3> --get\n"
+                "  --mode  <0|1>",
+        .hint = NULL,
+        .func = &do_m54r_cmd,
+        .argtable = &m54r_args};
+    ESP_ERROR_CHECK(esp_console_cmd_register(&cmd));
+}
+
+/**
+ * @brief Register all I2C tools commands
+ *
+ * This function registers the I2C configuration, detection, reading, writing,
+ * dumping, DAC setting, SSD1306 display control, and M54R console commands.
+ */
+
 void register_i2ctools(void)
 {
     register_i2cconfig();
@@ -630,4 +849,6 @@ void register_i2ctools(void)
     register_i2cdump();
     register_dac_set();
     register_ssd1306();
+    register_m54r(); // M54R console commands
+    ESP_LOGI(TAG, "I2C tools commands registered");
 }

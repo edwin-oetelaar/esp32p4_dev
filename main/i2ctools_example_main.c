@@ -109,7 +109,8 @@ void app_main(void)
     printf(" |  5. Try 'i2cset' to set the value of specific register     |\n");
     printf(" |  6. Try 'i2cdump' to dump all the register (Experiment)    |\n");
     printf(" |  7. Try 'dac_set_output' to set DAC voltages               |\n");
-    printf(" |                                                            |\n");
+    printf(" |  8. Try 'ssd1306' [-s display integer]                     |\n");
+    printf(" |  9. Try 'm54r' -relay 0-4 -state 0|1                     |\n");
     printf(" ==============================================================\n\n");
 
     #if CONFIG_EXAMPLE_GP8413_SDC

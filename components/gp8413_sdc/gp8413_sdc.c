@@ -41,11 +41,11 @@ typedef enum
             return ESP_ERR_INVALID_ARG; \
     } while (0)
 
-#define CHECK_CHANNEL(ch)               \
-    do                                  \
-    {                                   \
-        if ((ch) > GP8413_CHANNEL_MAX || ((int)(ch)) < 0)  \
-            return ESP_ERR_INVALID_ARG; \
+#define CHECK_CHANNEL(ch)                                 \
+    do                                                    \
+    {                                                     \
+        if ((ch) > GP8413_CHANNEL_MAX || ((int)(ch)) < 0) \
+            return ESP_ERR_INVALID_ARG;                   \
     } while (0)
 
 #define CHECK_RANGE(r)                                                       \
