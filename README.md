@@ -76,8 +76,11 @@ Use UP/DOWN arrows to navigate through command history.
 Press TAB when typing command name to auto-complete.
 I (379) main_task: Returned from app_main()
 i2c-tools> help
-help
-  Print the list of registered commands
+help  [<string>] [-v <0|1>]
+  Print the summary of all registered commands if no arguments are given,
+  otherwise print summary of given command.
+      <string>  Name of command
+  -v, --verbose=<0|1>  If specified, list console commands with given verbose level
 
 i2cconfig  [--port=<0|1>] [--freq=<Hz>] --sda=<gpio> --scl=<gpio>
   Config I2C bus
@@ -86,7 +89,7 @@ i2cconfig  [--port=<0|1>] [--freq=<Hz>] --sda=<gpio> --scl=<gpio>
   --sda=<gpio>  Set the gpio for I2C SDA
   --scl=<gpio>  Set the gpio for I2C SCL
 
-i2cdetect
+i2cdetect 
   Scan I2C bus for devices
 
 i2cget  -c <chip_addr> [-r <register_addr>] [-l <length>]
@@ -106,36 +109,28 @@ i2cdump  -c <chip_addr> [-s <size>]
   -c, --chip=<chip_addr>  Specify the address of the chip on that bus
   -s, --size=<size>  Specify the size of each read
 
-free
-  Get the current size of free heap memory
+dac_set_output  [-s <ch0 speed in mv>] [-b <ch1 brake_force in mv>]
+  Set value of DAC output
+  -s, --ch0=<ch0 speed in mv>  Output value for channel 0 in millivolts
+  -b, --ch1=<ch1 brake_force in mv>  Output value for channel 1 in millivolts
 
-heap
-  Get minimum size of free heap memory that was available during program execu
-  tion
+ssd1306  [-s display integer]
+  Set text
+  -s, --txt=display integer  some value
 
-version
-  Get version of chip and SDK
+m54r  [-g] [-r <0-3>] [-s <0-1>] [-l <0-3>] [-m <0-1>]
+  Schakel relais en LED's, en stel bedieningsmodus in:
+  --relay <0-3> --set <0|1>
+  --relay <0-3> --get
+  --led   <0-3> --set <0|1>
+  --led   <0-3> --get
+  --mode  <0|1>
+  -r, --relay=<0-3>  Relaynumer (0 t/m 3)
+  -s, --set=<0-1>  0=UIT, 1=AAN
+     -g, --get  Geef status terug
+  -l, --led=<0-3>  LED-nummer (0 t/m 3)
+  -m, --mode=<0-1>  0=Manueel, 1=Automatisch
 
-restart
-  Software reset of the chip
-
-deep_sleep  [-t <t>] [--io=<n>] [--io_level=<0|1>]
-  Enter deep sleep mode. Two wakeup modes are supported: timer and GPIO. If no
-  wakeup option is specified, will sleep indefinitely.
-  -t, --time=<t>  Wake up time, ms
-      --io=<n>  If specified, wakeup using GPIO with given number
-  --io_level=<0|1>  GPIO level to trigger wakeup
-
-light_sleep  [-t <t>] [--io=<n>]... [--io_level=<0|1>]...
-  Enter light sleep mode. Two wakeup modes are supported: timer and GPIO. Mult
-  iple GPIO pins can be specified using pairs of 'io' and 'io_level' arguments
-  . Will also wake up on UART input.
-  -t, --time=<t>  Wake up time, ms
-      --io=<n>  If specified, wakeup using GPIO with given number
-  --io_level=<0|1>  GPIO level to trigger wakeup
-
-tasks
-  Get information about running tasks
 ```
 
 ### Configure the I2C bus
