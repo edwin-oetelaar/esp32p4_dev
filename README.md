@@ -1,9 +1,34 @@
-| Supported Targets | ESP32 | ESP32-C2 | ESP32-C3 | ESP32-C5 | ESP32-C6 | ESP32-C61 | ESP32-H2 | ESP32-P4 | ESP32-S2 | ESP32-S3 |
-| ----------------- | ----- | -------- | -------- | -------- | -------- | --------- | -------- | -------- | -------- | -------- |
+# ESP32P4 dev board
+
+### The hardware
+
+![ESP32-dev-board](images/ESP32-P4-DevKit-1.jpg)
+
+This is the ESP32P4 Ethernet board I am working with
+
+![DAC2-m5-stack](images/m5stack-dac2-unit-gp8413-i2c-2-1500x1500.jpg)
+
+The DAC2 (10 Volt dual channel high resolution)
+
+![OLed-display-2.42inch](images/oled_1306_128x64_TT.jpg)
+
+The i2c Relay board (4 channel)
+
+![M5_4Relay_board](images/M5STACK-U097-Unit-4-Relay-Relais-Overview-Overzicht-1500x1500TT.jpg)
+
+### external links 
+
+
+- esp32 board : https://www.olimex.com/Products/IoT/ESP32-P4/ESP32-P4-DevKit/open-source-hardware
+- dac 2 : DAC 2 I2C Unit (GP8413) https://shop.m5stack.com/products/m5stickc-dac-2-hat-gp8413
+- display : ssd 1306, tinytronics : https://www.tinytronics.nl/nl/displays/oled/2.42-inch-oled-display-128*64-pixels-groen-i2c
+- m5_4relay board  : https://shop.m5stack.com/products/4-relay-unit
 
 # I2C Tools Example
 
-(See the README.md file in the upper level 'examples' directory for more information about examples.)
+### about
+
+this project is made by Edwin van den Oetelaar
 
 ## Overview
 
@@ -27,15 +52,15 @@ To run this example, you should have any ESP32, ESP32-S, ESP32-C, ESP32-H, ESP32
 
 **Note:** The following pin assignments are used by default according to `CONFIG_I2C_MASTER_SCL` and `CONFIG_I2C_MASTER_SDA` , you can change them with `i2cconfig` command at any time.
 
-|                     | SDA    | SCL    | GND  | Other | VCC  |
-| ------------------- | ------ | ------ | ---- | ----- | ---- |
-| ESP32 I2C Master    | GPIO18 | GPIO19 | GND  | GND   | 3.3V |
-| ESP32-S2 I2C Master | GPIO5  | GPIO4  | GND  | GND   | 3.3V |
-| ESP32-S3 I2C Master | GPIO5  | GPIO4  | GND  | GND   | 3.3V |
-| ESP32-C3 I2C Master | GPIO5  | GPIO4  | GND  | GND   | 3.3V |
-| ESP32-C2 I2C Master | GPIO5  | GPIO4  | GND  | GND   | 3.3V |
-| ESP32-H2 I2C Master | GPIO5  | GPIO4  | GND  | GND   | 3.3V |
-| Sensor              | SDA    | SCL    | GND  | WAK   | VCC  |
+|                     | SDA    | SCL    | GND | Other | VCC  |
+| ------------------- | ------ | ------ | --- | ----- | ---- |
+| ESP32 I2C Master    | GPIO18 | GPIO19 | GND | GND   | 3.3V |
+| ESP32-S2 I2C Master | GPIO5  | GPIO4  | GND | GND   | 3.3V |
+| ESP32-S3 I2C Master | GPIO5  | GPIO4  | GND | GND   | 3.3V |
+| ESP32-C3 I2C Master | GPIO5  | GPIO4  | GND | GND   | 3.3V |
+| ESP32-C2 I2C Master | GPIO5  | GPIO4  | GND | GND   | 3.3V |
+| ESP32-H2 I2C Master | GPIO5  | GPIO4  | GND | GND   | 3.3V |
+| Sensor              | SDA    | SCL    | GND | WAK   | VCC  |
 
 **Note:** It is recommended to add external pull-up resistors for SDA/SCL pins to make the communication more stable, though the driver will enable internal pull-up resistors.
 
@@ -203,7 +228,4 @@ i2c-tools> i2cget -c 0x5b -r 0x02 -l 8
   * Reset you I2C device, and then run `i2cdetect` again.
 * I can’t get the right content when running `i2cdump` command.
   * Currently the `i2cdump` only support those who have the same content length of registers inside the I2C device. For example, if a device have three register addresses, and the content length at these address are 1 byte, 2 bytes and 4 bytes. In this case you should not expect this command to dump the register correctly.
-
-
-(For any technical queries, please open an [issue](https://github.com/espressif/esp-idf/issues) on GitHub. We will get back to you as soon as possible.)
 
